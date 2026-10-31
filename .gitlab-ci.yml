@@ -1,3 +1,75 @@
-test:
+stages: [test, sast, secrets, deps, build, scan-image, push]
+
+variables:
+  GIT_DEPTH: "0"
+  BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA
+  FRONTEND_IMAGE: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA
+
+# ---------- Tests ----------
+test-backend:
+  stage: test
+  image: node:20.20.2-alpine
   script:
-    - echo "runner OK"
+    - cd backend
+    - npm ci
+    - npm run lint
+    - npm test
+
+test-frontend:
+  stage: test
+  image: node:20.20.2-alpine
+  script:
+    - cd frontend
+    - npm ci
+    - npm run lint
+    - npm run build
+
+# ---------- Contrôles de sécurité (bloquants) ----------
+sast-semgrep:
+  stage: sast
+  image: semgrep/semgrep:1.182.1
+  script:
+    - semgrep scan --config p/javascript --config p/nodejs --config p/secrets --error --metrics=off backend/src frontend/src
+
+secrets-gitleaks:
+  stage: secrets
+  image:
+    name: ghcr.io/gitleaks/gitleaks:v8.30.1
+    entrypoint: [""]
+  script:
+    - gitleaks git --redact --no-banner -v .
+
+deps-trivy:
+  stage: deps
+  image:
+    name: aquasec/trivy:0.71.2
+    entrypoint: [""]
+  script:
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 backend frontend
+
+# ---------- Build, scan image, push ----------
+build-images:
+  stage: build
+  image: docker:29-cli
+  script:
+    - docker build -t $BACKEND_IMAGE backend
+    - docker build -t $FRONTEND_IMAGE frontend
+
+scan-image:
+  stage: scan-image
+  image:
+    name: aquasec/trivy:0.71.2
+    entrypoint: [""]
+  script:
+    - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $BACKEND_IMAGE
+    - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $FRONTEND_IMAGE
+
+push-images:
+  stage: push
+  image: docker:29-cli
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+    - docker push $BACKEND_IMAGE
+    - docker push $FRONTEND_IMAGE
