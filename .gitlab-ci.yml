@@ -1,5 +1,8 @@
 stages: [test, sast, secrets, deps, build, scan-image, push]
 
+default:
+  tags: [docker]
+
 variables:
   GIT_DEPTH: "0"
   BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA
@@ -45,7 +48,8 @@ deps-trivy:
     name: aquasec/trivy:0.71.2
     entrypoint: [""]
   script:
-    - trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 backend frontend
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 backend
+    - trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 frontend
 
 # ---------- Build, scan image, push ----------
 build-images:
