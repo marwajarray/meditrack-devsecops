@@ -11,7 +11,11 @@ export default function PatientView() {
     setRecord(await getMyRecord());
     setAppts(await getAppointments());
   }
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    let active = true;
+    getAppointments().then((a) => { if (active) setAppts(a); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   async function submitNote(e) {
     e.preventDefault();
