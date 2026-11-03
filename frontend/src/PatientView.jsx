@@ -13,7 +13,9 @@ export default function PatientView() {
   }
   useEffect(() => {
     let active = true;
-    getAppointments().then((a) => { if (active) setAppts(a); }).catch(() => {});
+    Promise.all([getMyRecord(), getAppointments()])
+      .then(([r, a]) => { if (active) { setRecord(r); setAppts(a); } })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
