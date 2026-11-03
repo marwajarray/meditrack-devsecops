@@ -56,8 +56,8 @@ build-images:
   stage: build
   image: docker:29-cli
   script:
-    - docker build -t $BACKEND_IMAGE backend
-    - docker build -t $FRONTEND_IMAGE frontend
+    - docker build --pull --no-cache -t $BACKEND_IMAGE backend
+    - docker build --pull --no-cache -t $FRONTEND_IMAGE frontend
 
 scan-image:
   stage: scan-image
