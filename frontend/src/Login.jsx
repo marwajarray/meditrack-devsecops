@@ -32,17 +32,12 @@ export default function Login({ onLogin }) {
         </div>
         <form onSubmit={submit}>
           <label htmlFor="email">Adresse e-mail</label>
-          <input id="email" placeholder="patient1@meditrack.test" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input id="email" placeholder="vous@exemple.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           <label htmlFor="pwd">Mot de passe</label>
           <input id="pwd" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <button type="submit">Se connecter</button>
         </form>
         {error && <p className="error">{error}</p>}
-        <p className="hint">
-          Comptes de test :<br />
-          patient1@meditrack.test / Patient123!<br />
-          doctor1@meditrack.test / Doctor123!
-        </p>
       </div>
     </div>
   );
