@@ -77,3 +77,23 @@ push-images:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
     - docker push $BACKEND_IMAGE
     - docker push $FRONTEND_IMAGE
+
+# ---------- Rapports Trivy (informatif, non bloquant) ----------
+trivy-report:
+  stage: scan-image
+  image:
+    name: aquasec/trivy:0.71.2
+    entrypoint: [""]
+  allow_failure: true
+  script:
+    - mkdir -p trivy-reports
+    - trivy image --format template --template "@/contrib/html.tpl" -o trivy-reports/image-backend.html $BACKEND_IMAGE
+    - trivy image --format template --template "@/contrib/html.tpl" -o trivy-reports/image-frontend.html $FRONTEND_IMAGE
+    - trivy fs --scanners vuln --format template --template "@/contrib/html.tpl" -o trivy-reports/deps-backend.html backend
+    - trivy fs --scanners vuln --format template --template "@/contrib/html.tpl" -o trivy-reports/deps-frontend.html frontend
+    - trivy config --format template --template "@/contrib/html.tpl" -o trivy-reports/k8s-config.html k8s
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - trivy-reports/
