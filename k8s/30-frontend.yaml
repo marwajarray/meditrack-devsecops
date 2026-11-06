@@ -33,7 +33,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: frontend
-          image: registry.gitlab.com/marwa.jarray.912/meditrack/frontend:1aead801
+          image: registry.gitlab.com/marwa.jarray.912/meditrack/frontend:c94b1c1d
           imagePullPolicy: IfNotPresent
           ports:
             - {name: http, containerPort: 8080}
