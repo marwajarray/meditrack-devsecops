@@ -1,3 +1,10 @@
 node_modules/
 .env
 *.log
+zap/
+v1-sqli.txt
+v2-idor.txt
+v5-xss.txt
+v6-misconfig.txt
+batterie.sh
+passage-*.txt
