@@ -1,42 +1,43 @@
 const express = require('express');
+const helmet = require('helmet');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const client = require('prom-client');
 
-// VULN V3 : identifiants de base de données en dur dans le code
-const DB_URL = process.env.DATABASE_URL ||
-  'postgres://meditrack:meditrack123@localhost:5432/meditrack';
-// VULN V4 : secret JWT trivial et jeton valable 30 jours
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
-const JWT_EXPIRES = '30d';
+const DB_URL = process.env.DATABASE_URL;
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES = process.env.JWT_EXPIRES || '8h';
+if (!DB_URL || !JWT_SECRET) {
+  console.error('DATABASE_URL et JWT_SECRET sont obligatoires');
+  process.exit(1);
+}
 
 const pool = new Pool({ connectionString: DB_URL });
 
-// ---------- Journaux JSON (sans mot de passe ni donnée de santé) ----------
 function log(level, event, extra = {}) {
   console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...extra }));
 }
 function audit(event, detail = '') {
   log('warn', event, { detail });
-  pool.query('INSERT INTO security_events(event, detail) VALUES($1,$2)', [event, detail])
-    .catch(() => {});
+  pool.query('INSERT INTO security_events(event, detail) VALUES($1,$2)', [event, detail]).catch(() => {});
 }
 
-// ---------- Métriques Prometheus ----------
 client.collectDefaultMetrics();
 const httpDuration = new client.Histogram({
   name: 'http_request_duration_seconds',
-  help: 'Durée des requêtes HTTP',
+  help: 'Duree des requetes HTTP',
   labelNames: ['method', 'route', 'status'],
   buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2]
 });
 
 const app = express();
+app.disable('x-powered-by');
+app.use(helmet());
+const allowed = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({ origin: allowed.length ? allowed : false, credentials: true }));
 app.use(express.json());
-// VULN V6 : CORS ouvert à tous, pas de helmet, en-tête X-Powered-By actif
-app.use(cors());
 
 app.use((req, res, next) => {
   const end = httpDuration.startTimer();
@@ -48,7 +49,6 @@ app.use((req, res, next) => {
 
 const ah = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
-// ---------- Authentification et rôles (BF1, BF3) ----------
 function auth(req, res, next) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
@@ -68,14 +68,12 @@ function role(...roles) {
   };
 }
 
-// ---------- Santé et métriques (BF11) ----------
 app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
 app.get('/metrics', ah(async (req, res) => {
   res.set('Content-Type', client.register.contentType);
   res.end(await client.register.metrics());
 }));
 
-// ---------- Comptes (BF1, BF2) ----------
 app.post('/api/auth/register', ah(async (req, res) => {
   const { email, password, full_name } = req.body || {};
   if (!email || !password || !full_name) return res.status(400).json({ error: 'champs manquants' });
@@ -102,7 +100,6 @@ app.post('/api/auth/login', ah(async (req, res) => {
   res.json({ token, role: u.role, full_name: u.full_name });
 }));
 
-// ---------- Patient : dossier et rendez-vous (BF4, BF5) ----------
 app.get('/api/me/patient', auth, role('patient'), ah(async (req, res) => {
   const r = await pool.query('SELECT * FROM patients WHERE user_id = $1', [req.user.id]);
   res.json(r.rows[0] || null);
@@ -142,8 +139,6 @@ app.delete('/api/appointments/:id', auth, role('patient'), ah(async (req, res) =
   res.json({ cancelled: r.rows[0].id });
 }));
 
-// Notes de rendez-vous (BF8)
-// VULN V5 : la note est stockée telle quelle ; le frontend l'affichera sans échappement
 app.post('/api/appointments/:id/notes', auth, role('patient', 'doctor'), ah(async (req, res) => {
   const a = await pool.query(
     `SELECT a.*, p.user_id AS patient_user FROM appointments a
@@ -163,21 +158,25 @@ app.post('/api/appointments/:id/notes', auth, role('patient', 'doctor'), ah(asyn
   res.json(r.rows[0]);
 }));
 
-// ---------- Médecin : recherche et dossiers (BF6, BF7) ----------
 app.get('/api/patients', auth, role('doctor'), ah(async (req, res) => {
   const name = req.query.name || '';
-  // VULN V1 : injection SQL, la saisie est concaténée dans la requête
-  const sql = "SELECT id, full_name, birth_date FROM patients WHERE full_name ILIKE '%" + name + "%'";
-  const r = await pool.query(sql);
+  const r = await pool.query(
+    "SELECT id, full_name, birth_date FROM patients WHERE full_name ILIKE '%' || $1 || '%'",
+    [name]);
   res.json(r.rows);
 }));
 
-// VULN V2 : IDOR, aucun contrôle que le dossier appartient à l'utilisateur
-// ou que le patient est affecté à ce médecin
 app.get('/api/patients/:id', auth, role('patient', 'doctor'), ah(async (req, res) => {
   const r = await pool.query('SELECT * FROM patients WHERE id = $1', [req.params.id]);
-  if (!r.rows[0]) return res.status(404).json({ error: 'patient introuvable' });
-  res.json(r.rows[0]);
+  const p = r.rows[0];
+  if (!p) return res.status(404).json({ error: 'patient introuvable' });
+  const ok = (req.user.role === 'patient' && p.user_id === req.user.id) ||
+             (req.user.role === 'doctor' && p.doctor_id === req.user.id);
+  if (!ok) {
+    audit('access_denied', `user=${req.user.id} patient=${p.id}`);
+    return res.status(403).json({ error: 'interdit' });
+  }
+  res.json(p);
 }));
 
 app.put('/api/patients/:id/record', auth, role('doctor'), ah(async (req, res) => {
@@ -185,11 +184,10 @@ app.put('/api/patients/:id/record', auth, role('doctor'), ah(async (req, res) =>
   const r = await pool.query(
     'UPDATE patients SET diagnosis = $1, treatment = $2 WHERE id = $3 AND doctor_id = $4 RETURNING *',
     [diagnosis, treatment, req.params.id, req.user.id]);
-  if (!r.rows[0]) return res.status(404).json({ error: 'patient non affecté ou introuvable' });
+  if (!r.rows[0]) return res.status(404).json({ error: 'patient non affecte ou introuvable' });
   res.json(r.rows[0]);
 }));
 
-// ---------- Administrateur (BF9, BF10) ----------
 app.get('/api/admin/users', auth, role('admin'), ah(async (req, res) => {
   const r = await pool.query('SELECT id, email, role, full_name, active FROM users ORDER BY id');
   res.json(r.rows);
@@ -219,10 +217,9 @@ app.get('/api/admin/events', auth, role('admin'), ah(async (req, res) => {
   res.json(r.rows);
 }));
 
-// VULN V6 : le message d'erreur et la pile d'appels sont renvoyés au client
 app.use((err, req, res, next) => {
   log('error', 'unhandled_error', { message: err.message });
-  res.status(500).json({ error: err.message, stack: err.stack });
+  res.status(500).json({ error: 'erreur interne' });
 });
 
 module.exports = app;

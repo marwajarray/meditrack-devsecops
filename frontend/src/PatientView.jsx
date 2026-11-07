@@ -50,7 +50,7 @@ export default function PatientView() {
               </span>
             </div>
             {/* VULN V5 : la note est injectée telle quelle dans le HTML, sans échappement */}
-            {a.notes && <div className="note" dangerouslySetInnerHTML={{ __html: a.notes }} />}
+            {a.notes && <div className="note">{a.notes}</div>}
           </li>
         ))}
       </ul>
