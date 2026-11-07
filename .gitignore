@@ -8,3 +8,7 @@ v5-xss.txt
 v6-misconfig.txt
 batterie.sh
 passage-*.txt
+*.swp
+*.swo
+*.swn
+*.backup
