@@ -71,10 +71,18 @@ scan-image:
   image:
     name: aquasec/trivy:0.71.2
     entrypoint: [""]
+  timeout: 2h
+  cache:
+    key: trivy-db-v0.71.2
+    paths:
+      - .trivycache/
+    policy: pull-push
+  variables:
+    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+    TRIVY_NO_PROGRESS: "true"
   script:
     - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $BACKEND_IMAGE
     - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $FRONTEND_IMAGE
-
 push-images:
   stage: push
   image: docker:29-cli
@@ -92,6 +100,18 @@ trivy-report:
     name: aquasec/trivy:0.71.2
     entrypoint: [""]
   allow_failure: true
+  when: always
+  needs:
+    - job: scan-image
+  timeout: 2h
+  cache:
+    key: trivy-db-v0.71.2
+    paths:
+      - .trivycache/
+    policy: pull
+  variables:
+    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+    TRIVY_NO_PROGRESS: "true"
   script:
     - mkdir -p trivy-reports
     - trivy image --format template --template "@/contrib/html.tpl" -o trivy-reports/image-backend.html $BACKEND_IMAGE
@@ -104,7 +124,6 @@ trivy-report:
     expire_in: 30 days
     paths:
       - trivy-reports/
-
 # ---------- DAST : OWASP ZAP ----------
 zap-baseline:
   stage: zap-scan
