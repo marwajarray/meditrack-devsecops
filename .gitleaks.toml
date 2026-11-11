@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Clé de cache Trivy (faux positif generic-api-key)"
+regexTarget = "match"
+regexes = ['''key: *["']?trivy-db-''']
