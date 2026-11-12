@@ -16,21 +16,29 @@ variables:
 test-backend:
   stage: test
   image: node:20.20.2-alpine
+  cache:
+    key: backend-npm
+    paths:
+      - backend/node_modules/
   variables:
     DATABASE_URL: "postgresql://test:test@127.0.0.1:5432/meditrack_test"
     JWT_SECRET: "test-only-jwt-secret-not-for-production-1234567890"
   script:
     - cd backend
-    - npm ci
+    - npm ci --prefer-offline --no-audit --no-fund
     - npm run lint
     - npm test
 
 test-frontend:
   stage: test
   image: node:20.20.2-alpine
+  cache:
+    key: frontend-npm
+    paths:
+      - frontend/node_modules/
   script:
     - cd frontend
-    - npm ci
+    - npm ci --prefer-offline --no-audit --no-fund
     - npm run lint
     - npm run build
 
