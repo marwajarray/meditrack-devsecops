@@ -145,13 +145,13 @@ zap-baseline:
     - when: manual
   script:
     - |
-      if [ -z "${DAST_TARGET_URL:-}" ]; then
-        echo "ERREUR : définir la variable CI/CD DAST_TARGET_URL."
+      if [ -z "${URL_CIBLE_DAST:-}" ]; then
+        echo "ERREUR : définir la variable CI/CD URL_CIBLE_DAST."
         echo "Exemple : https://staging.example.com"
         exit 1
       fi
     - mkdir -p zap-reports
-    - zap-baseline.py -t "$DAST_TARGET_URL" -r zap-reports/zap-baseline.html -J zap-reports/zap-baseline.json -I
+    - zap-baseline.py -t "$URL_CIBLE_DAST" -r zap-reports/zap-baseline.html -J zap-reports/zap-baseline.json -I
   artifacts:
     when: always
     expire_in: 30 days
