@@ -150,8 +150,9 @@ zap-baseline:
         echo "Exemple : https://staging.example.com"
         exit 1
       fi
-    - mkdir -p zap-reports
-    - zap-baseline.py -t "$URL_CIBLE_DAST" -r zap-reports/zap-baseline.html -J zap-reports/zap-baseline.json -I
+    - mkdir -p zap-reports /zap/wrk
+    - zap-baseline.py -t "$URL_CIBLE_DAST" -r zap-baseline.html -J zap-baseline.json -I || true
+    - cp /zap/wrk/zap-baseline.html /zap/wrk/zap-baseline.json zap-reports/
   artifacts:
     when: always
     expire_in: 30 days
