@@ -92,7 +92,8 @@ app.post('/api/auth/login', ah(async (req, res) => {
   const r = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
   const u = r.rows[0];
   if (!u || !u.active || !(await bcrypt.compare(password || '', u.password_hash))) {
-    audit('login_failed', `email=${email}`);
+        const masked = String(email || '').replace(/^(.).*(@.*)$/, '$1***$2');
+    audit('login_failed', `email=${masked}`);
     return res.status(401).json({ error: 'identifiants invalides' });
   }
   const token = jwt.sign({ id: u.id, role: u.role, email: u.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
