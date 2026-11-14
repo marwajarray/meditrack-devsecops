@@ -1,0 +1,9 @@
+loki:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 5Gi
+promtail:
+  enabled: true
+grafana:
+  enabled: false
